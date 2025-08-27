@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
-import { Search, Download, Instagram, Facebook, Twitter, Linkedin, Clock, Calendar, User } from "lucide-react"
+import { Search, Download, Instagram, Facebook, Twitter, Linkedin, Clock, Calendar, User, FileText } from "lucide-react"
 import { PageTransition, StaggeredPageTransition, CardTransition, ListTransition, ListItemTransition } from "@/components/page-transition"
 import { Post } from "@/lib/types"
 
@@ -223,7 +223,12 @@ export default function HistoryPage() {
                       <div className={`w-8 h-8 ${getPlatformColor(post.plataforma)} rounded-lg flex items-center justify-center`}>
                         {getPlatformIcon(post.plataforma)}
                       </div>
-                      <span className="font-semibold capitalize">{post.plataforma}</span>
+                      <div className="flex flex-col">
+                        <span className="font-semibold capitalize">{post.plataforma}</span>
+                        <Badge variant="outline" className="text-xs mt-1 w-fit">
+                          {(post.tipo || 'publicacion') === 'historia' ? '📱 Historia' : '📄 Publicación'}
+                        </Badge>
+                      </div>
                     </div>
                     <Badge className={getEstadoColor(post.estado)}>
                       {post.estado}
@@ -235,15 +240,40 @@ export default function HistoryPage() {
                   </div>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  {post.imagen_url && (
-                    <div className="aspect-video bg-gray-100 rounded-lg flex items-center justify-center">
-                      <img 
-                        src={post.imagen_url} 
-                        alt="Post image" 
-                        className="w-full h-full object-cover rounded-lg"
-                      />
-                    </div>
-                  )}
+                  <div className="aspect-video bg-gray-100 rounded-lg flex items-center justify-center overflow-hidden relative">
+                    {post.imagen_url ? (
+                      <>
+                        <img 
+                          src={post.imagen_url} 
+                          alt="Post image" 
+                          className="w-full h-full object-cover rounded-lg"
+                          onError={(e) => {
+                            const target = e.target as HTMLImageElement;
+                            target.style.display = 'none';
+                            const fallback = target.parentElement?.querySelector('.image-fallback');
+                            if (fallback) {
+                              fallback.classList.remove('hidden');
+                            }
+                          }}
+                        />
+                        <div className="image-fallback hidden absolute inset-0 flex items-center justify-center bg-gray-100 rounded-lg">
+                          <div className="text-center">
+                            <div className="w-12 h-12 bg-gray-300 rounded-full mx-auto mb-2 flex items-center justify-center">
+                              <FileText className="w-6 h-6 text-gray-500" />
+                            </div>
+                            <p className="text-gray-500 text-sm">Imagen no disponible</p>
+                          </div>
+                        </div>
+                      </>
+                    ) : (
+                      <div className="text-center">
+                        <div className="w-12 h-12 bg-gray-300 rounded-full mx-auto mb-2 flex items-center justify-center">
+                          <FileText className="w-6 h-6 text-gray-500" />
+                        </div>
+                        <p className="text-gray-500 text-sm">Sin imagen</p>
+                      </div>
+                    )}
+                  </div>
                   <div>
                     <h3 className="font-semibold mb-2">
                       {post.titulo || `Post en ${post.plataforma}`}

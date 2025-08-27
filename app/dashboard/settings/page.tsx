@@ -6,6 +6,11 @@ import { Badge } from "@/components/ui/badge"
 import { Settings, Instagram, Facebook, Building2, User, Clock } from "lucide-react"
 import { useUser } from "@clerk/nextjs"
 import { useEffect, useState } from "react"
+import { InstagramConnection } from "@/components/instagram/instagram-connection"
+import { InstagramSetupHelp } from "@/components/instagram/instagram-setup-help"
+import { InstagramDebug } from "@/components/instagram/instagram-debug"
+import { InstagramBusinessSetup } from "@/components/instagram/instagram-business-setup"
+import { InstagramPermissionsHelp } from "@/components/instagram/instagram-permissions-help"
 
 export default function SettingsPage() {
   const { isSignedIn, isLoaded } = useUser()
@@ -19,6 +24,32 @@ export default function SettingsPage() {
       fetchUserData()
     }
   }, [isSignedIn, isLoaded])
+
+  // Verificar si hay debug token en la URL
+  const [debugToken, setDebugToken] = useState<string | undefined>()
+  const [showBusinessSetup, setShowBusinessSetup] = useState(false)
+  const [showPermissionsHelp, setShowPermissionsHelp] = useState(false)
+  
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search)
+    const debugTokenParam = urlParams.get('debug_token')
+    const errorParam = urlParams.get('error')
+    
+    if (debugTokenParam) {
+      setDebugToken(debugTokenParam)
+    }
+    
+    if (errorParam === 'no_instagram_business') {
+      setShowBusinessSetup(true)
+    }
+    
+    if (errorParam === 'instagram_details_failed') {
+      setShowPermissionsHelp(true)
+    }
+    
+    // Limpiar la URL
+    window.history.replaceState({}, document.title, window.location.pathname)
+  }, [])
 
   const fetchUserData = async () => {
     try {
@@ -82,70 +113,31 @@ export default function SettingsPage() {
         <p className="text-muted-foreground">Gestiona tu perfil y conexiones de redes sociales</p>
       </div>
 
-      {/* Conexiones de Redes Sociales */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center space-x-2">
-            <Settings className="w-5 h-5 text-primary" />
-            <span>Conexiones de Redes Sociales</span>
-          </CardTitle>
-          <CardDescription>
-            Conecta tus cuentas de redes sociales para publicar directamente desde Lumina
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-4">
-            {/* Instagram */}
-            <div className="flex items-center justify-between p-4 border border-border rounded-lg">
-              <div className="flex items-center space-x-3">
-                <div className="w-10 h-10 bg-gradient-to-br from-purple-500 to-pink-500 rounded-lg flex items-center justify-center">
-                  <Instagram className="w-5 h-5 text-white" />
-                </div>
-                <div>
-                  <div className="font-medium">Instagram</div>
-                  <div className="text-sm text-muted-foreground">@cafeteluna</div>
-                  <div className="text-xs text-green-600 flex items-center mt-1">
-                    <Clock className="w-3 h-3 mr-1" />
-                    Conectado hace 2 días
-                  </div>
-                </div>
-              </div>
-              <div className="flex space-x-2">
-                <Badge variant="secondary" className="bg-green-100 text-green-800">
-                  Conectado
-                </Badge>
-                <Button variant="outline" size="sm">
-                  Desconectar
-                </Button>
-              </div>
-            </div>
-
-            {/* Facebook */}
-            <div className="flex items-center justify-between p-4 border border-border rounded-lg">
-              <div className="flex items-center space-x-3">
-                <div className="w-10 h-10 bg-blue-600 rounded-lg flex items-center justify-center">
-                  <Facebook className="w-5 h-5 text-white" />
-                </div>
-                <div>
-                  <div className="font-medium">Facebook</div>
-                  <div className="text-sm text-muted-foreground">No conectado</div>
-                  <div className="text-xs text-muted-foreground mt-1">
-                    Conecta tu página de Facebook
-                  </div>
-                </div>
-              </div>
-              <div className="flex space-x-2">
-                <Badge variant="secondary" className="bg-gray-100 text-gray-600">
-                  No conectado
-                </Badge>
-                <Button size="sm">
-                  Conectar
-                </Button>
-              </div>
-            </div>
+      {/* Conexiones de Instagram */}
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-lg font-semibold">Conexiones de Instagram</h2>
+            <p className="text-sm text-muted-foreground">
+              Conecta tus cuentas de Instagram Business para publicar contenido
+            </p>
           </div>
-        </CardContent>
-      </Card>
+          <InstagramSetupHelp />
+        </div>
+        <InstagramConnection onConnectionChange={() => {
+          // Recargar datos si es necesario
+          console.log('Conexión de Instagram actualizada')
+        }} />
+        
+        {/* Debug Component */}
+        {debugToken && <InstagramDebug debugToken={debugToken} />}
+        
+        {/* Business Setup Component */}
+        {showBusinessSetup && <InstagramBusinessSetup />}
+        
+        {/* Permissions Help Component */}
+        {showPermissionsHelp && <InstagramPermissionsHelp />}
+      </div>
 
       {/* Información de la Empresa */}
       {empresaData && (

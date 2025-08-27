@@ -2,7 +2,7 @@
 
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
-import { LayoutDashboard, Plus, History, Settings } from "lucide-react"
+import { LayoutDashboard, Plus, History, Settings, FileText, Calendar } from "lucide-react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import Image from "next/image"
@@ -17,6 +17,16 @@ const navigation = [
     name: "Generar Post",
     href: "/dashboard/generate",
     icon: Plus,
+  },
+  {
+    name: "Borradores",
+    href: "/dashboard/drafts",
+    icon: FileText,
+  },
+  {
+    name: "Programados",
+    href: "/dashboard/scheduled",
+    icon: Calendar,
   },
   {
     name: "Historial",

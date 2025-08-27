@@ -6,7 +6,8 @@ import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
-import { MoreHorizontal, Edit, Users, Trash2, Building2 } from "lucide-react"
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { MoreHorizontal, Edit, Users, Trash2, Building2, CreditCard, CheckCircle, XCircle } from "lucide-react"
 import { EditCompanyDialog } from "./edit-company-dialog"
 import { CompanyUsersDialog } from "./company-users-dialog"
 import { Empresa } from "@/lib/types"
@@ -23,6 +24,20 @@ const getStatusBadge = (isActive: boolean) => {
     </Badge>
   ) : (
     <Badge variant="secondary">Inactiva</Badge>
+  )
+}
+
+const getPaymentBadge = (pagoRecibido: boolean) => {
+  return pagoRecibido ? (
+    <Badge variant="default" className="bg-green-100 text-green-800 hover:bg-green-100">
+      <CheckCircle className="w-3 h-3 mr-1" />
+      Pagado
+    </Badge>
+  ) : (
+    <Badge variant="destructive" className="bg-red-100 text-red-800 hover:bg-red-100">
+      <XCircle className="w-3 h-3 mr-1" />
+      Pendiente
+    </Badge>
   )
 }
 
@@ -44,6 +59,12 @@ export function CompaniesTable({ empresas, onRefresh }: CompaniesTableProps) {
   const [selectedCompany, setSelectedCompany] = useState<Empresa | null>(null)
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
   const [isUsersDialogOpen, setIsUsersDialogOpen] = useState(false)
+  const [isPaymentConfirmOpen, setIsPaymentConfirmOpen] = useState(false)
+  const [pendingPaymentAction, setPendingPaymentAction] = useState<{
+    empresaId: string
+    currentStatus: boolean
+    empresaNombre: string
+  } | null>(null)
 
   const handleEdit = (empresa: Empresa) => {
     setSelectedCompany(empresa)
@@ -61,6 +82,48 @@ export function CompaniesTable({ empresas, onRefresh }: CompaniesTableProps) {
       // Aquí iría la lógica para eliminar la empresa
       // await deleteEmpresa(empresaId)
       // onRefresh?.()
+    }
+  }
+
+  const handleTogglePayment = (empresaId: string, currentStatus: boolean, empresaNombre: string) => {
+    setPendingPaymentAction({
+      empresaId,
+      currentStatus,
+      empresaNombre
+    })
+    setIsPaymentConfirmOpen(true)
+  }
+
+  const confirmPaymentToggle = async () => {
+    if (!pendingPaymentAction) return
+
+    const { empresaId, currentStatus } = pendingPaymentAction
+    const newStatus = !currentStatus
+
+    try {
+      const response = await fetch(`/api/admin/empresas/${empresaId}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          pago_recibido: newStatus
+        })
+      })
+
+      if (response.ok) {
+        console.log(`✅ Estado de pago actualizado para empresa ${empresaId}`)
+        onRefresh?.()
+      } else {
+        console.error('❌ Error actualizando estado de pago')
+        alert('Error actualizando el estado de pago')
+      }
+    } catch (error) {
+      console.error('❌ Error en confirmPaymentToggle:', error)
+      alert('Error actualizando el estado de pago')
+    } finally {
+      setIsPaymentConfirmOpen(false)
+      setPendingPaymentAction(null)
     }
   }
 
@@ -92,6 +155,7 @@ export function CompaniesTable({ empresas, onRefresh }: CompaniesTableProps) {
               <TableHead>Sitio Web</TableHead>
               <TableHead>Usuarios</TableHead>
               <TableHead>Estado</TableHead>
+              <TableHead>Pago</TableHead>
               <TableHead>Fecha Registro</TableHead>
               <TableHead className="w-[70px]">Acciones</TableHead>
             </TableRow>
@@ -149,6 +213,19 @@ export function CompaniesTable({ empresas, onRefresh }: CompaniesTableProps) {
                   </div>
                 </TableCell>
                 <TableCell>{getStatusBadge(empresa.is_active)}</TableCell>
+                <TableCell>
+                  <div className="flex items-center space-x-2">
+                    {getPaymentBadge(empresa.pago_recibido)}
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleTogglePayment(empresa.id, empresa.pago_recibido, empresa.nombre)}
+                      className="h-6 w-6 p-0"
+                    >
+                      <CreditCard className="w-3 h-3" />
+                    </Button>
+                  </div>
+                </TableCell>
                 <TableCell className="text-muted-foreground text-sm">
                   {empresa.fecha_registro}
                 </TableCell>
@@ -210,6 +287,42 @@ export function CompaniesTable({ empresas, onRefresh }: CompaniesTableProps) {
           setSelectedCompany(null)
         }}
       />
+
+      {/* Modal de Confirmación de Pago */}
+      <Dialog open={isPaymentConfirmOpen} onOpenChange={setIsPaymentConfirmOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Confirmar Cambio de Estado de Pago</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <p className="text-muted-foreground">
+              ¿Estás seguro de que quieres{' '}
+              <span className="font-semibold">
+                {pendingPaymentAction?.currentStatus ? 'marcar como pendiente' : 'marcar como pagado'}
+              </span>{' '}
+              para la empresa{' '}
+              <span className="font-semibold text-primary">
+                {pendingPaymentAction?.empresaNombre}
+              </span>
+              ?
+            </p>
+            <div className="flex justify-end space-x-2">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setIsPaymentConfirmOpen(false)
+                  setPendingPaymentAction(null)
+                }}
+              >
+                Cancelar
+              </Button>
+              <Button onClick={confirmPaymentToggle}>
+                Confirmar
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </>
   )
 }

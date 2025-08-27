@@ -61,6 +61,7 @@ export async function GET() {
        sitio_web: empresa.sitio_web,
        logo_url: empresa.logo_url,
        is_active: empresa.is_active,
+       pago_recibido: empresa.pago_recibido,
        created_at: empresa.created_at,
        updated_at: empresa.updated_at,
        // Información adicional para el dashboard

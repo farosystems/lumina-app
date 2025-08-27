@@ -104,6 +104,46 @@ CREATE TABLE registro_actividad (
 );
 ```
 
+### 6. Tabla de Conexiones Sociales (conexiones_sociales)
+
+```sql
+CREATE TABLE conexiones_sociales (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  usuario_id UUID NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,
+  empresa_id UUID NOT NULL REFERENCES empresas(id) ON DELETE CASCADE,
+  plataforma VARCHAR(50) NOT NULL CHECK (plataforma IN ('instagram', 'facebook', 'twitter', 'linkedin', 'tiktok')),
+  nombre_cuenta VARCHAR(255) NOT NULL,
+  access_token TEXT NOT NULL,
+  refresh_token TEXT,
+  token_expires_at TIMESTAMP WITH TIME ZONE,
+  account_id VARCHAR(255), -- ID de la cuenta en la plataforma
+  metadata JSONB, -- Datos adicionales como followers, tipo de cuenta, etc.
+  is_active BOOLEAN DEFAULT true,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  UNIQUE(usuario_id, plataforma, account_id)
+);
+```
+
+### 7. Tabla de Publicaciones Sociales (publicaciones_sociales)
+
+```sql
+CREATE TABLE publicaciones_sociales (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  post_id UUID NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
+  conexion_social_id UUID NOT NULL REFERENCES conexiones_sociales(id) ON DELETE CASCADE,
+  plataforma VARCHAR(50) NOT NULL,
+  estado VARCHAR(20) DEFAULT 'pendiente' CHECK (estado IN ('pendiente', 'publicando', 'publicado', 'fallido')),
+  fecha_programada TIMESTAMP WITH TIME ZONE,
+  fecha_publicacion TIMESTAMP WITH TIME ZONE,
+  post_id_plataforma VARCHAR(255), -- ID del post en la plataforma social
+  error_message TEXT,
+  metadata JSONB, -- Datos adicionales como engagement, likes, etc.
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+```
+
 ## 🔐 Políticas de Seguridad (RLS)
 
 ```sql
@@ -180,6 +220,42 @@ CREATE POLICY "Admins ven toda la actividad" ON registro_actividad
       AND rol = 'admin'
     )
   );
+
+-- Políticas para conexiones sociales
+CREATE POLICY "Usuarios ven conexiones de su empresa" ON conexiones_sociales
+  FOR ALL USING (
+    empresa_id IN (
+      SELECT empresa_id FROM usuarios WHERE clerk_id = auth.jwt() ->> 'sub'
+    )
+  );
+
+CREATE POLICY "Admins ven todas las conexiones" ON conexiones_sociales
+  FOR ALL USING (
+    EXISTS (
+      SELECT 1 FROM usuarios 
+      WHERE clerk_id = auth.jwt() ->> 'sub' 
+      AND rol = 'admin'
+    )
+  );
+
+-- Políticas para publicaciones sociales
+CREATE POLICY "Usuarios ven publicaciones de su empresa" ON publicaciones_sociales
+  FOR ALL USING (
+    post_id IN (
+      SELECT p.id FROM posts p 
+      JOIN usuarios u ON p.empresa_id = u.empresa_id 
+      WHERE u.clerk_id = auth.jwt() ->> 'sub'
+    )
+  );
+
+CREATE POLICY "Admins ven todas las publicaciones" ON publicaciones_sociales
+  FOR ALL USING (
+    EXISTS (
+      SELECT 1 FROM usuarios 
+      WHERE clerk_id = auth.jwt() ->> 'sub' 
+      AND rol = 'admin'
+    )
+  );
 ```
 
 ## 📊 Índices Recomendados
@@ -196,6 +272,12 @@ CREATE INDEX idx_posts_plataforma ON posts(plataforma);
 CREATE INDEX idx_plantillas_posts_empresa_id ON plantillas_posts(empresa_id);
 CREATE INDEX idx_registro_actividad_empresa_id ON registro_actividad(empresa_id);
 CREATE INDEX idx_registro_actividad_fecha ON registro_actividad(created_at);
+CREATE INDEX idx_conexiones_sociales_usuario_id ON conexiones_sociales(usuario_id);
+CREATE INDEX idx_conexiones_sociales_empresa_id ON conexiones_sociales(empresa_id);
+CREATE INDEX idx_conexiones_sociales_plataforma ON conexiones_sociales(plataforma);
+CREATE INDEX idx_publicaciones_sociales_post_id ON publicaciones_sociales(post_id);
+CREATE INDEX idx_publicaciones_sociales_estado ON publicaciones_sociales(estado);
+CREATE INDEX idx_publicaciones_sociales_fecha_programada ON publicaciones_sociales(fecha_programada);
 ```
 
 ## 🔄 Triggers para Auditoría
@@ -215,6 +297,8 @@ CREATE TRIGGER update_empresas_updated_at BEFORE UPDATE ON empresas FOR EACH ROW
 CREATE TRIGGER update_usuarios_updated_at BEFORE UPDATE ON usuarios FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 CREATE TRIGGER update_posts_updated_at BEFORE UPDATE ON posts FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 CREATE TRIGGER update_plantillas_posts_updated_at BEFORE UPDATE ON plantillas_posts FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+CREATE TRIGGER update_conexiones_sociales_updated_at BEFORE UPDATE ON conexiones_sociales FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+CREATE TRIGGER update_publicaciones_sociales_updated_at BEFORE UPDATE ON publicaciones_sociales FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 ```
 
 ## 📝 Ejemplo de Datos

@@ -24,6 +24,8 @@ export default function GeneratePage() {
     productName: "",
     communicationType: "",
     characteristics: [] as string[],
+    productImage: undefined as string | undefined,
+    imageSource: undefined as "file" | "url" | "camera" | undefined,
     // Step 2: Promotion
     promotion: "",
     imageFormat: "4:5" as "4:5" | "1:1" | "9:16",
@@ -35,7 +37,12 @@ export default function GeneratePage() {
   const router = useRouter()
 
   const updateFormData = (data: Partial<typeof formData>) => {
-    setFormData((prev) => ({ ...prev, ...data }))
+    console.log('🔄 updateFormData llamado con:', data)
+    setFormData((prev) => {
+      const newData = { ...prev, ...data }
+      console.log('📝 Nuevo formData después de update:', newData)
+      return newData
+    })
   }
 
   const nextStep = () => {
@@ -52,10 +59,52 @@ export default function GeneratePage() {
 
   const handleGenerate = async () => {
     setIsGenerating(true)
-    // Simulate AI generation
-    await new Promise((resolve) => setTimeout(resolve, 3000))
-    setIsGenerating(false)
-    router.push("/dashboard/generate/preview")
+    
+    try {
+      console.log('🚀 Iniciando generación de contenido...')
+      console.log('📝 Form data completo:', formData)
+      console.log('🖼️ Imagen del producto en cliente:', !!formData.productImage)
+      console.log('🔗 URL/Data de imagen en cliente:', formData.productImage ? formData.productImage.substring(0, 100) + '...' : 'No hay imagen')
+      
+      // Asegurar que todos los campos se envíen, incluso si son undefined
+      const completeFormData = {
+        ...formData,
+        productImage: formData.productImage || null,
+        imageSource: formData.imageSource || null,
+        isStory: isStory, // Agregar información sobre si es historia
+      }
+      
+      console.log('📦 Form data que se enviará al API:', Object.keys(completeFormData))
+      console.log('🖼️ productImage en payload:', !!completeFormData.productImage)
+      
+      const response = await fetch('/api/generate/content', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ formData: completeFormData }),
+      })
+
+      if (response.ok) {
+        const generatedContent = await response.json()
+        console.log('✅ Contenido generado:', generatedContent)
+        
+        // Guardar el contenido generado en localStorage para la página de preview
+        localStorage.setItem('generatedContent', JSON.stringify(generatedContent))
+        
+        // Redirigir a preview
+        router.push("/dashboard/generate/preview")
+      } else {
+        const errorData = await response.json()
+        console.error('❌ Error en generación:', errorData)
+        alert('Error al generar contenido: ' + (errorData.error || 'Error desconocido'))
+      }
+    } catch (error) {
+      console.error('❌ Error en handleGenerate:', error)
+      alert('Error al generar contenido. Por favor intenta nuevamente.')
+    } finally {
+      setIsGenerating(false)
+    }
   }
 
   const isStepValid = () => {
@@ -71,6 +120,9 @@ export default function GeneratePage() {
     }
   }
 
+  // Determinar si es una historia basada en el formato de imagen
+  const isStory = formData.imageFormat === "9:16"
+
   if (isGenerating) {
     return (
       <div className="min-h-[60vh] flex items-center justify-center">
@@ -79,12 +131,39 @@ export default function GeneratePage() {
             <div className="w-16 h-16 bg-gradient-primary rounded-full flex items-center justify-center mx-auto mb-4">
               <Sparkles className="w-8 h-8 text-white animate-pulse" />
             </div>
-            <h3 className="text-xl font-semibold mb-2">Generando contenido con IA...</h3>
+            <h3 className="text-xl font-semibold mb-2">
+              {isStory ? "Generando historia con IA..." : "Generando contenido con IA..."}
+            </h3>
             <p className="text-muted-foreground mb-4">
-              Estamos creando el copy perfecto y la imagen ideal para tu producto
+              {isStory 
+                ? "Estamos creando la imagen perfecta para tu historia"
+                : "Estamos creando el copy perfecto y la imagen ideal para tu producto"
+              }
             </p>
             <Progress value={66} className="w-full" />
-            <p className="text-sm text-muted-foreground mt-2">Esto puede tomar unos segundos</p>
+            <div className="mt-4 space-y-2">
+              {!isStory && (
+                <div className="flex items-center text-sm text-muted-foreground">
+                  <div className="w-2 h-2 bg-green-500 rounded-full mr-2"></div>
+                  Generando copy con GPT-3.5-turbo
+                </div>
+              )}
+              <div className="flex items-center text-sm text-muted-foreground">
+                <div className="w-2 h-2 bg-orange-500 rounded-full mr-2 animate-pulse"></div>
+                Analizando imagen de producto con GPT-4 Vision
+              </div>
+              <div className="flex items-center text-sm text-muted-foreground">
+                <div className="w-2 h-2 bg-blue-500 rounded-full mr-2 animate-pulse"></div>
+                Generando imagen con DALL-E 3
+              </div>
+              {!isStory && (
+                <div className="flex items-center text-sm text-muted-foreground">
+                  <div className="w-2 h-2 bg-purple-500 rounded-full mr-2"></div>
+                  Generando hashtags optimizados
+                </div>
+              )}
+            </div>
+            <p className="text-sm text-muted-foreground mt-4">Esto puede tomar 30-60 segundos</p>
           </CardContent>
         </Card>
       </div>
@@ -95,8 +174,15 @@ export default function GeneratePage() {
     <div className="max-w-4xl mx-auto space-y-6">
       {/* Header */}
       <div className="text-center">
-        <h1 className="text-3xl font-heading font-bold">Generar Nuevo Post</h1>
-        <p className="text-muted-foreground">Crea contenido profesional con IA en 3 simples pasos</p>
+        <h1 className="text-3xl font-heading font-bold">
+          {isStory ? "Generar Nueva Historia" : "Generar Nuevo Post"}
+        </h1>
+        <p className="text-muted-foreground">
+          {isStory 
+            ? "Crea historias impactantes con IA en 3 simples pasos" 
+            : "Crea contenido profesional con IA en 3 simples pasos"
+          }
+        </p>
       </div>
 
       {/* Progress */}
@@ -159,7 +245,7 @@ export default function GeneratePage() {
             className="bg-purple-600 hover:bg-purple-700 text-white"
           >
             <Sparkles className="w-4 h-4 mr-2" />
-            Generar Contenido
+            {isStory ? "Generar Historia" : "Generar Contenido"}
           </Button>
         )}
       </div>

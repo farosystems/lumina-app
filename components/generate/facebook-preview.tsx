@@ -10,9 +10,10 @@ interface FacebookPreviewProps {
   copy: string
   hashtags: string
   isRegeneratingImage?: boolean
+  imageUrl?: string | null
 }
 
-export function FacebookPreview({ copy, hashtags, isRegeneratingImage }: FacebookPreviewProps) {
+export function FacebookPreview({ copy, hashtags, isRegeneratingImage, imageUrl }: FacebookPreviewProps) {
   return (
     <Card className="w-full max-w-md mx-auto bg-white border-gray-200">
       <CardContent className="p-0">
@@ -44,7 +45,7 @@ export function FacebookPreview({ copy, hashtags, isRegeneratingImage }: Faceboo
         </div>
 
         {/* Facebook Image */}
-        <div className="aspect-[16/10] bg-gray-100 relative">
+        <div className="aspect-[16/10] bg-gray-100 relative overflow-hidden">
           {isRegeneratingImage ? (
             <div className="w-full h-full flex items-center justify-center">
               <div className="text-center space-y-2">
@@ -52,12 +53,29 @@ export function FacebookPreview({ copy, hashtags, isRegeneratingImage }: Faceboo
                 <p className="text-sm text-gray-500">Generando imagen...</p>
               </div>
             </div>
-          ) : (
+          ) : imageUrl ? (
             <img
-              src="/placeholder.svg?height=320&width=512&text=Café+Colombiano+Premium"
+              src={imageUrl}
               alt="Generated content"
               className="w-full h-full object-cover"
+              onError={(e) => {
+                console.error('❌ Error cargando imagen generada:', imageUrl)
+                // Fallback si la imagen generada falla
+                (e.target as HTMLImageElement).src = "/placeholder.svg?height=320&width=512&text=Error+cargando+imagen"
+              }}
+              onLoad={() => {
+                console.log('✅ Imagen cargada exitosamente en preview de Facebook')
+              }}
             />
+          ) : (
+            <div className="w-full h-full flex items-center justify-center bg-gray-200">
+              <div className="text-center space-y-2">
+                <div className="w-16 h-16 bg-gray-300 rounded-full mx-auto flex items-center justify-center">
+                  <span className="text-gray-500 text-xl">🎨</span>
+                </div>
+                <p className="text-sm text-gray-500">Imagen generada con IA</p>
+              </div>
+            </div>
           )}
         </div>
 

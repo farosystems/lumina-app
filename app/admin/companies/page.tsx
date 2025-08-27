@@ -39,7 +39,7 @@ const ErrorCard = ({ error }: { error: string }) => (
 )
 
 // Componente de estadísticas optimizado
-const StatsGrid = ({ stats }: { stats: { total: number; activas: number; inactivas: number; totalUsuarios: number } }) => {
+const StatsGrid = ({ stats }: { stats: { total: number; activas: number; inactivas: number; pagadas: number; pendientes: number; totalUsuarios: number } }) => {
   const statsCards = useMemo(() => [
     {
       title: "Total Empresas",
@@ -56,18 +56,18 @@ const StatsGrid = ({ stats }: { stats: { total: number; activas: number; inactiv
       color: "text-green-600"
     },
     {
-      title: "Empresas Inactivas",
-      value: stats.inactivas.toString(),
-      description: "Empresas pausadas",
-      icon: AlertCircle,
-      color: "text-orange-600"
+      title: "Licencias Pagadas",
+      value: stats.pagadas.toString(),
+      description: "Empresas con pago al día",
+      icon: Users,
+      color: "text-emerald-600"
     },
     {
-      title: "Total Usuarios",
-      value: stats.totalUsuarios.toString(),
-      description: "Usuarios en el sistema",
-      icon: Users,
-      color: "text-purple-600"
+      title: "Pagos Pendientes",
+      value: stats.pendientes.toString(),
+      description: "Empresas con pago pendiente",
+      icon: AlertCircle,
+      color: "text-red-600"
     }
   ], [stats])
 
@@ -162,9 +162,11 @@ export default function CompaniesPage() {
     const total = empresas.length
     const activas = empresas.filter(e => e.is_active).length
     const inactivas = total - activas
+    const pagadas = empresas.filter(e => e.pago_recibido).length
+    const pendientes = total - pagadas
     const totalUsuarios = empresas.reduce((sum, empresa) => sum + (empresa.usuarios_count || 0), 0)
     
-    return { total, activas, inactivas, totalUsuarios }
+    return { total, activas, inactivas, pagadas, pendientes, totalUsuarios }
   }, [empresas])
 
   useEffect(() => {

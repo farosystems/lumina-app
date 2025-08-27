@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { auth } from '@clerk/nextjs/server'
 import { supabaseAdmin } from '@/lib/supabase'
+import { generateFileName } from '@/lib/image-storage'
 
 export async function GET(request: Request) {
   try {
@@ -91,13 +92,28 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json()
-    const { titulo, contenido, plataforma, hashtags, imagen_url, prompt_utilizado } = body
+    const { titulo, contenido, plataforma, tipo, hashtags, imagen_url, prompt_utilizado, storage_file_name, is_permanent_image } = body
 
-    console.log('🔍 Datos del post:', { titulo, contenido, plataforma, hashtags, imagen_url, prompt_utilizado })
+    console.log('🔍 Datos del post:', { titulo, contenido, plataforma, tipo, hashtags, imagen_url, prompt_utilizado })
 
     // Validar datos requeridos
-    if (!contenido || !plataforma) {
-      return NextResponse.json({ error: 'Contenido y plataforma son requeridos' }, { status: 400 })
+    if (!plataforma) {
+      return NextResponse.json({ error: 'Plataforma es requerida' }, { status: 400 })
+    }
+    
+    // Para historias, solo se requiere imagen. Para publicaciones, se requiere contenido
+    const isStory = tipo === 'historia'
+    if (!isStory && !contenido) {
+      return NextResponse.json({ error: 'Contenido es requerido para publicaciones' }, { status: 400 })
+    }
+    
+    if (isStory && !imagen_url) {
+      return NextResponse.json({ error: 'Imagen es requerida para historias' }, { status: 400 })
+    }
+
+    // Validar tipo
+    if (tipo && !['publicacion', 'historia'].includes(tipo)) {
+      return NextResponse.json({ error: 'Tipo no válido. Debe ser "publicacion" o "historia"' }, { status: 400 })
     }
 
     // Validar plataforma
@@ -113,12 +129,16 @@ export async function POST(request: Request) {
         empresa_id: user.empresa_id,
         usuario_id: user.id,
         titulo: titulo?.trim() || null,
-        contenido: contenido.trim(),
+        contenido: isStory ? (contenido?.trim() || '') : contenido.trim(),
         plataforma: plataforma,
+        tipo: tipo || 'publicacion', // Default a 'publicacion' si no se especifica
         estado: 'borrador',
         imagen_url: imagen_url?.trim() || null,
         hashtags: hashtags || [],
         prompt_utilizado: prompt_utilizado?.trim() || null,
+        storage_file_name: storage_file_name || null,
+        storage_bucket: 'post-images',
+        is_permanent_image: is_permanent_image || false,
         metadata: {
           created_via: 'web_interface',
           user_agent: request.headers.get('user-agent') || null
@@ -145,7 +165,8 @@ export async function POST(request: Request) {
         metadata: {
           post_id: newPost.id,
           plataforma: plataforma,
-          contenido_length: contenido.length,
+          tipo: tipo || 'publicacion',
+          contenido_length: contenido?.length || 0,
           hashtags_count: hashtags?.length || 0
         }
       })

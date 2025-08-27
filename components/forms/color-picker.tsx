@@ -118,3 +118,8 @@ export function ColorPicker({ value = [], onChange, maxColors = 5 }: ColorPicker
 
 
 
+
+
+
+
+

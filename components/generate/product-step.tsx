@@ -48,12 +48,17 @@ export function ProductStep({ formData, updateFormData }: ProductStepProps) {
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
     if (file) {
+      console.log('📁 Archivo seleccionado:', file.name, file.size, file.type)
       const reader = new FileReader()
       reader.onload = (e) => {
+        const imageData = e.target?.result as string
+        console.log('📸 Imagen cargada, tamaño:', imageData.length)
+        console.log('📸 Tipo de imagen:', imageData.substring(0, 50) + '...')
         updateFormData({
-          productImage: e.target?.result as string,
+          productImage: imageData,
           imageSource: "file",
         })
+        console.log('✅ updateFormData llamado con imagen')
       }
       reader.readAsDataURL(file)
     }
@@ -61,10 +66,12 @@ export function ProductStep({ formData, updateFormData }: ProductStepProps) {
 
   const handleUrlUpload = () => {
     if (imageUrl.trim()) {
+      console.log('🔗 URL de imagen ingresada:', imageUrl)
       updateFormData({
         productImage: imageUrl,
         imageSource: "url",
       })
+      console.log('✅ updateFormData llamado con URL')
       setImageUrl("")
     }
   }

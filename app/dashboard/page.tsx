@@ -7,6 +7,7 @@ import { Plus, FileText, Calendar, Instagram, Facebook, TrendingUp, Clock, User,
 import { useUser } from "@clerk/nextjs"
 import { useEffect, useState, useMemo, useCallback } from "react"
 import { PageTransition, StaggeredPageTransition, CardTransition } from "@/components/page-transition"
+import { RecentActivity } from "@/components/client/recent-activity"
 
 // Componente de loading optimizado
 const LoadingSpinner = () => (
@@ -298,46 +299,7 @@ export default function Dashboard() {
             <CardDescription>Últimas publicaciones y actividades</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="space-y-4">
-              <div className="flex items-center justify-between p-3 bg-secondary/20 rounded-lg">
-                <div className="flex items-center space-x-3">
-                  <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center">
-                    <Instagram className="w-4 h-4 text-blue-600" />
-                  </div>
-                  <div>
-                    <p className="font-medium">Post publicado en Instagram</p>
-                    <p className="text-sm text-muted-foreground">Hace 2 horas</p>
-                  </div>
-                </div>
-                <Badge variant="outline">Publicado</Badge>
-              </div>
-              
-              <div className="flex items-center justify-between p-3 bg-secondary/20 rounded-lg">
-                <div className="flex items-center space-x-3">
-                  <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
-                    <Facebook className="w-4 h-4 text-white" />
-                  </div>
-                  <div>
-                    <p className="font-medium">Campaña programada</p>
-                    <p className="text-sm text-muted-foreground">Para mañana a las 10:00</p>
-                  </div>
-                </div>
-                <Badge variant="secondary">Programado</Badge>
-              </div>
-              
-              <div className="flex items-center justify-between p-3 bg-secondary/20 rounded-lg">
-                <div className="flex items-center space-x-3">
-                  <div className="w-8 h-8 bg-green-100 rounded-lg flex items-center justify-center">
-                    <TrendingUp className="w-4 h-4 text-green-600" />
-                  </div>
-                  <div>
-                    <p className="font-medium">Análisis completado</p>
-                    <p className="text-sm text-muted-foreground">Rendimiento mejorado 15%</p>
-                  </div>
-                </div>
-                <Badge variant="outline">Completado</Badge>
-              </div>
-            </div>
+            <RecentActivity limit={5} />
           </CardContent>
         </Card>
       </CardTransition>

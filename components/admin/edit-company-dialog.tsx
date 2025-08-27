@@ -18,6 +18,7 @@ interface Empresa {
   descripcion?: string
   logo_url?: string
   is_active: boolean
+  pago_recibido: boolean
   created_at: string
   updated_at: string
   usuarios_count: number
