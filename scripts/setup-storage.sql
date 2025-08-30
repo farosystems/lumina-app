@@ -35,3 +35,11 @@ FOR DELETE USING (
 -- Verificar que el bucket se creó correctamente
 SELECT * FROM storage.buckets WHERE id = 'post-images';
 
+
+
+
+
+
+
+
+

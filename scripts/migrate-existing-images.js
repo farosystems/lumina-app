@@ -53,3 +53,11 @@ const migrateExistingImages = async () => {
 // Ejecutar migración
 migrateExistingImages()
 
+
+
+
+
+
+
+
+

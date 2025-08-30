@@ -211,3 +211,11 @@ Si encuentras problemas, revisa:
 2. Los logs del navegador en la consola de desarrollador
 3. El estado del bucket en Supabase Dashboard
 
+
+
+
+
+
+
+
+

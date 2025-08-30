@@ -10,27 +10,64 @@ const supabase = createClient(
 
 export async function POST(request: NextRequest) {
   try {
-    const { userId } = await auth()
-    if (!userId) {
-      return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
+    const { connectionId, caption, imageUrl, scheduledTime, postId, contentType, isSchedulerRequest, schedulerUserId } = await request.json()
+
+    let userId: string | null = null
+    let userData: any = null
+
+    // Verificar si es una llamada del scheduler interno
+    const isInternalScheduler = isSchedulerRequest === true && schedulerUserId
+    
+    if (isInternalScheduler) {
+      console.log('🤖 Llamada interna del scheduler detectada para usuario:', schedulerUserId)
+      
+      // Para llamadas del scheduler, obtener información del usuario desde Supabase directamente
+      const { data: schedulerUserData, error: schedulerUserError } = await supabase
+        .from('usuarios')
+        .select('id, empresa_id')
+        .eq('id', schedulerUserId)
+        .single()
+
+      if (schedulerUserError || !schedulerUserData) {
+        console.error('❌ Error obteniendo usuario del scheduler:', schedulerUserError)
+        return NextResponse.json({ error: 'Usuario del scheduler no encontrado' }, { status: 404 })
+      }
+
+      userData = schedulerUserData
+      console.log('✅ Usuario del scheduler validado:', userData.id)
+    } else {
+      // Para llamadas normales, usar autenticación de Clerk
+      const authResult = await auth()
+      userId = authResult.userId
+      
+      if (!userId) {
+        return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
+      }
+
+      // Obtener información del usuario normal
+      const { data: normalUserData, error: normalUserError } = await supabase
+        .from('usuarios')
+        .select('id, empresa_id')
+        .eq('clerk_id', userId)
+        .single()
+
+      if (normalUserError || !normalUserData) {
+        return NextResponse.json({ error: 'Usuario no encontrado' }, { status: 404 })
+      }
+
+      userData = normalUserData
     }
 
-    const { connectionId, caption, imageUrl, scheduledTime, postId } = await request.json()
-
-    if (!connectionId || !caption) {
-      return NextResponse.json({ error: 'Conexión y caption son requeridos' }, { status: 400 })
+    if (!connectionId) {
+      return NextResponse.json({ error: 'Conexión es requerida' }, { status: 400 })
     }
 
-    // Obtener información del usuario
-    const { data: userData, error: userError } = await supabase
-      .from('usuarios')
-      .select('id, empresa_id')
-      .eq('clerk_id', userId)
-      .single()
-
-    if (userError || !userData) {
-      return NextResponse.json({ error: 'Usuario no encontrado' }, { status: 404 })
+    // Para historias no requerimos caption, para posts sí
+    if (contentType !== 'story' && !caption) {
+      return NextResponse.json({ error: 'Caption es requerido para posts' }, { status: 400 })
     }
+
+    // userData ya está definido arriba según el tipo de llamada
 
     // Verificar que la conexión pertenezca al usuario
     const { data: connection, error: connectionError } = await supabase
@@ -50,7 +87,8 @@ export async function POST(request: NextRequest) {
       connectionId,
       caption,
       imageUrl,
-      scheduledTime
+      scheduledTime,
+      contentType || 'post'
     )
 
     // Si hay un postId, crear registro de publicación social

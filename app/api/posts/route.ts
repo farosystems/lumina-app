@@ -92,9 +92,13 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json()
-    const { titulo, contenido, plataforma, tipo, hashtags, imagen_url, prompt_utilizado, storage_file_name, is_permanent_image } = body
+    const { titulo, contenido, plataforma, tipo, hashtags, imagen_url, prompt_utilizado, storage_file_name, is_permanent_image, estado, fecha_programada } = body
 
-    console.log('🔍 Datos del post:', { titulo, contenido, plataforma, tipo, hashtags, imagen_url, prompt_utilizado })
+    console.log('🔍 Datos del post:', { titulo, contenido, plataforma, tipo, hashtags, imagen_url, prompt_utilizado, estado, fecha_programada })
+    if (fecha_programada) {
+      console.log('📅 Fecha programada recibida:', fecha_programada)
+      console.log('📅 Fecha programada como Date:', new Date(fecha_programada))
+    }
 
     // Validar datos requeridos
     if (!plataforma) {
@@ -132,13 +136,14 @@ export async function POST(request: Request) {
         contenido: isStory ? (contenido?.trim() || '') : contenido.trim(),
         plataforma: plataforma,
         tipo: tipo || 'publicacion', // Default a 'publicacion' si no se especifica
-        estado: 'borrador',
+        estado: estado || 'borrador', // Usar el estado enviado o default a 'borrador'
         imagen_url: imagen_url?.trim() || null,
         hashtags: hashtags || [],
         prompt_utilizado: prompt_utilizado?.trim() || null,
         storage_file_name: storage_file_name || null,
         storage_bucket: 'post-images',
         is_permanent_image: is_permanent_image || false,
+        fecha_programada: fecha_programada || null, // Agregar fecha_programada
         metadata: {
           created_via: 'web_interface',
           user_agent: request.headers.get('user-agent') || null

@@ -32,3 +32,11 @@ WHERE table_name = 'posts'
 AND column_name IN ('storage_file_name', 'storage_bucket', 'is_permanent_image')
 ORDER BY column_name;
 
+
+
+
+
+
+
+
+

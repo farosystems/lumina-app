@@ -89,6 +89,13 @@ export default function GeneratePage() {
         const generatedContent = await response.json()
         console.log('✅ Contenido generado:', generatedContent)
         
+        // Verificar si hubo error en la imagen
+        if (generatedContent.hasImageError) {
+          console.warn('⚠️ Error generando imagen:', generatedContent.imageError)
+          // Mostrar advertencia pero continuar con el flujo
+          alert(`⚠️ Advertencia: No se pudo generar la imagen: ${generatedContent.imageError}\n\nPuedes continuar con el copy generado y regenerar la imagen después.`)
+        }
+        
         // Guardar el contenido generado en localStorage para la página de preview
         localStorage.setItem('generatedContent', JSON.stringify(generatedContent))
         

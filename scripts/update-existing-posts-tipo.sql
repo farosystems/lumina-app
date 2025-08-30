@@ -30,3 +30,11 @@ SELECT
     COUNT(CASE WHEN tipo = 'historia' THEN 1 END) as historias
 FROM posts;
 
+
+
+
+
+
+
+
+

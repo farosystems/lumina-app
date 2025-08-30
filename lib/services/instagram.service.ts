@@ -348,9 +348,10 @@ export class InstagramService {
   // Publicar contenido en Instagram
   static async publishContent(
     connectionId: string,
-    caption: string,
+    caption?: string,
     imageUrl?: string,
-    scheduledTime?: string
+    scheduledTime?: string,
+    contentType: 'post' | 'story' = 'post'
   ): Promise<{ id: string; status: string }> {
     // Primero obtenemos la conexión
     const { data: connection, error: connectionError } = await supabase
@@ -363,10 +364,119 @@ export class InstagramService {
       throw new Error('Conexión no encontrada')
     }
 
-    // Si hay una imagen, primero la subimos
+    // Para historias, usar endpoint diferente
+    if (contentType === 'story') {
+      if (!imageUrl) {
+        throw new Error('Se requiere imagen para publicar historia')
+      }
+
+      console.log('📱 Publicando historia de Instagram...')
+      console.log('🔗 Account ID:', connection.account_id)
+      console.log('🖼️ Image URL:', imageUrl)
+      console.log('🔑 Access Token:', connection.access_token ? 'Presente' : 'Faltante')
+
+      // Para historias de Instagram, usamos el account_id que es el Instagram Business Account ID
+      const instagramAccountId = connection.account_id
+      if (!instagramAccountId) {
+        throw new Error('No se encontró el Account ID de Instagram en la conexión')
+      }
+      
+      console.log('🎯 Usando Instagram Account ID:', instagramAccountId)
+      console.log('📝 Usando media_type: STORIES según documentación oficial de Meta')
+
+      try {
+        // Paso 1: Crear el contenedor de media para la historia
+        console.log('📤 Paso 1: Creando contenedor de media para historia...')
+        const mediaCreateResponse = await fetch(
+          `https://graph.facebook.com/v18.0/${instagramAccountId}/media`,
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              image_url: imageUrl,
+              media_type: 'STORIES',
+              access_token: connection.access_token,
+            }),
+          }
+        )
+
+        console.log('📊 Status de creación de media:', mediaCreateResponse.status)
+        
+        if (!mediaCreateResponse.ok) {
+          const errorData = await mediaCreateResponse.json()
+          console.error('❌ Error al crear contenedor de media:', JSON.stringify(errorData, null, 2))
+          
+          // Intentar identificar el problema específico
+          if (errorData.error?.code === 100) {
+            throw new Error(`Error de parámetros: ${errorData.error.message}. Verifica que la URL de la imagen sea accesible públicamente.`)
+          } else if (errorData.error?.code === 200) {
+            throw new Error(`Error de permisos: ${errorData.error.message}. Verifica los permisos de tu aplicación Instagram.`)
+          } else {
+            throw new Error(`Error al crear historia: ${errorData.error?.message || 'Error desconocido'}`)
+          }
+        }
+
+        const mediaData = await mediaCreateResponse.json()
+        console.log('✅ Contenedor de media creado:', mediaData)
+        
+        // Paso 2: Publicar la historia usando el ID del contenedor
+        console.log('📤 Paso 2: Publicando historia con ID:', mediaData.id)
+        const publishResponse = await fetch(
+          `https://graph.facebook.com/v18.0/${instagramAccountId}/media_publish`,
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              creation_id: mediaData.id,
+              access_token: connection.access_token,
+            }),
+          }
+        )
+
+        console.log('📊 Status de publicación:', publishResponse.status)
+        
+        if (!publishResponse.ok) {
+          const errorData = await publishResponse.json()
+          console.error('❌ Error al publicar historia:', JSON.stringify(errorData, null, 2))
+          throw new Error(`Error al publicar historia: ${errorData.error?.message || 'Error desconocido'}`)
+        }
+
+        const publishData = await publishResponse.json()
+        console.log('✅ Historia publicada exitosamente:', publishData)
+        
+        return {
+          id: publishData.id,
+          status: 'published'
+        }
+
+      } catch (error) {
+        console.error('❌ Error completo en publicación de historia:', error)
+        if (error instanceof Error) {
+          throw error
+        } else {
+          throw new Error(`Error inesperado al publicar historia: ${String(error)}`)
+        }
+      }
+    }
+
+    // Para posts normales, usar la lógica existente
     let mediaId: string | undefined
 
     if (imageUrl) {
+      const mediaBody: any = {
+        image_url: imageUrl,
+        access_token: connection.access_token,
+      }
+      
+      // Solo agregar caption si existe y no está vacío
+      if (caption && caption.trim()) {
+        mediaBody.caption = caption
+      }
+
       const mediaResponse = await fetch(
         `https://graph.facebook.com/v18.0/${connection.account_id}/media`,
         {
@@ -374,11 +484,7 @@ export class InstagramService {
           headers: {
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify({
-            image_url: imageUrl,
-            caption: caption,
-            access_token: connection.access_token,
-          }),
+          body: JSON.stringify(mediaBody),
         }
       )
 
@@ -395,16 +501,20 @@ export class InstagramService {
       ? `https://graph.facebook.com/v18.0/${connection.account_id}/media_publish`
       : `https://graph.facebook.com/v18.0/${connection.account_id}/media`
 
-    const publishBody = mediaId 
+    const publishBody: any = mediaId 
       ? {
           creation_id: mediaId,
           access_token: connection.access_token,
         }
       : {
           image_url: imageUrl,
-          caption: caption,
           access_token: connection.access_token,
         }
+      
+    // Solo agregar caption si existe y no está vacío
+    if (caption && caption.trim()) {
+      publishBody.caption = caption
+    }
 
     const publishResponse = await fetch(publishUrl, {
       method: 'POST',

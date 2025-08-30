@@ -11,6 +11,34 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 )
 
+// Función para generar mensajes de error amigables para problemas de generación de imágenes
+function getImageErrorMessage(status: number, errorData: any): string {
+  const baseError = errorData?.error?.message || 'Error desconocido'
+  
+  switch (status) {
+    case 400:
+      if (baseError.toLowerCase().includes('content policy')) {
+        return 'El contenido solicitado no cumple con las políticas de OpenAI. Por favor intenta con una descripción diferente.'
+      }
+      return 'Hubo un problema con la solicitud de imagen. Por favor verifica la descripción e intenta nuevamente.'
+    
+    case 401:
+      return 'Error de autenticación con el servicio de generación de imágenes. Por favor contacta al soporte.'
+    
+    case 429:
+      return 'Límite de uso excedido. Por favor espera unos minutos antes de intentar generar otra imagen.'
+    
+    case 500:
+    case 502:
+    case 503:
+    case 504:
+      return 'El servicio de generación de imágenes está temporalmente no disponible. Ya intentamos varias veces automáticamente. Por favor intenta nuevamente en unos minutos.'
+    
+    default:
+      return `Error del servicio de imágenes: ${baseError}. Por favor intenta nuevamente.`
+  }
+}
+
 export async function POST(request: NextRequest) {
   try {
     const { userId } = await auth()
@@ -270,25 +298,61 @@ export async function POST(request: NextRequest) {
         console.log('📏 Longitud del prompt truncado:', finalImagePrompt.length, 'caracteres')
       }
 
-      // Usar la API directa de OpenAI para DALL-E
-      const requestBody = {
-        model: "dall-e-3",
-        prompt: finalImagePrompt,
-        n: 1,
-        size: imageSize,
-        quality: "standard",
+      // Función para llamar a DALL-E con reintentos automáticos
+      const callDalleWithRetry = async (retries = 3): Promise<Response> => {
+        const requestBody = {
+          model: "dall-e-3",
+          prompt: finalImagePrompt,
+          n: 1,
+          size: imageSize,
+          quality: "standard",
+        }
+
+        for (let attempt = 1; attempt <= retries; attempt++) {
+          console.log(`🎨 Intento ${attempt} de ${retries} - Llamando a DALL-E...`)
+          
+          const response = await fetch('https://api.openai.com/v1/images/generations', {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(requestBody),
+          })
+
+          console.log(`🎨 Respuesta de DALL-E (intento ${attempt}):`, response.status, response.statusText)
+
+          // Si la respuesta es exitosa o es un error no recuperable, devolver inmediatamente
+          if (response.ok || response.status === 400 || response.status === 401 || response.status === 403) {
+            return response
+          }
+
+          // Para errores 500 (server error), reintentar después de una pausa
+          if (response.status >= 500 && attempt < retries) {
+            const waitTime = Math.pow(2, attempt) * 1000 // Backoff exponencial: 2s, 4s, 8s
+            console.log(`⚠️ Error ${response.status} en DALL-E, reintentando en ${waitTime/1000}s...`)
+            
+            // Leer el error para logging
+            try {
+              const errorData = await response.json()
+              console.log(`❌ Error de DALL-E (intento ${attempt}):`, errorData)
+            } catch (e) {
+              console.log(`❌ Error leyendo respuesta de error de DALL-E`)
+            }
+            
+            await new Promise(resolve => setTimeout(resolve, waitTime))
+            continue
+          }
+
+          // Si es el último intento o un error no recuperable, devolver la respuesta
+          return response
+        }
+
+        // Esto nunca debería ejecutarse, pero por seguridad
+        throw new Error('Error inesperado en reintentos de DALL-E')
       }
 
-      const imageResponse = await fetch('https://api.openai.com/v1/images/generations', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(requestBody),
-      })
-
-      console.log('🎨 Respuesta de DALL-E:', imageResponse.status, imageResponse.statusText)
+      const imageResponse = await callDalleWithRetry(3)
 
       if (imageResponse.ok) {
         const imageData = await imageResponse.json()
@@ -327,13 +391,39 @@ export async function POST(request: NextRequest) {
         console.error('❌ Error generando imagen:', errorData)
         console.error('❌ Status:', imageResponse.status)
         console.error('❌ Headers:', Object.fromEntries(imageResponse.headers.entries()))
+        
+        // Lanzar error con mensaje específico basado en el código de error
+        const errorMessage = getImageErrorMessage(imageResponse.status, errorData)
+        throw new Error(errorMessage)
       }
     } catch (imageError) {
       console.error('❌ Error en generación de imagen:', imageError)
       console.error('❌ Stack trace:', (imageError as Error).stack)
+      
+      // En caso de error de imagen, devolver el copy y hashtags generados sin imagen
+      // para que el usuario pueda continuar con el flujo
+      const errorMessage = imageError instanceof Error ? imageError.message : 'Error desconocido generando imagen'
+      
+      const response = {
+        copy: generatedContent.copy,
+        hashtags: generatedContent.hashtags || [],
+        imageUrl: null,
+        storageInfo: {
+          storage_file_name: null,
+          is_permanent_image: false
+        },
+        formData: formData,
+        empresaData: mockEmpresaData,
+        regenerationCount: regenerationCount + 1,
+        imageError: errorMessage, // Incluir el mensaje de error para mostrar al usuario
+        hasImageError: true
+      }
+
+      console.log('⚠️ Generación completada con error en imagen')
+      return NextResponse.json(response)
     }
 
-    // Preparar respuesta
+    // Preparar respuesta exitosa
     const response = {
       copy: generatedContent.copy,
       hashtags: generatedContent.hashtags || [],
@@ -341,7 +431,8 @@ export async function POST(request: NextRequest) {
       storageInfo: storageInfo,
       formData: formData,
       empresaData: mockEmpresaData,
-      regenerationCount: regenerationCount + 1
+      regenerationCount: regenerationCount + 1,
+      hasImageError: false
     }
 
     console.log('🎉 Generación completada exitosamente')

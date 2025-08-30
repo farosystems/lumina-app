@@ -207,3 +207,11 @@ pm2 restart lumina-scheduler
 - Los errores se registran pero no detienen el procesamiento de otros posts
 - El sistema puede manejar múltiples posts programados simultáneamente
 
+
+
+
+
+
+
+
+

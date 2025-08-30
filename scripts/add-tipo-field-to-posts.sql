@@ -9,3 +9,11 @@ UPDATE posts SET tipo = 'publicacion' WHERE tipo IS NULL;
 -- Hacer el campo NOT NULL después de la actualización
 ALTER TABLE posts ALTER COLUMN tipo SET NOT NULL;
 
+
+
+
+
+
+
+
+

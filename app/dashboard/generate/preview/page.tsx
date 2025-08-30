@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
-import { RefreshCw, Save, Send, Calendar, ArrowLeft, Instagram, Facebook, X, Plus, Clock } from "lucide-react"
+import { RefreshCw, Save, Send, Calendar, ArrowLeft, Instagram, Facebook, X, Plus, Clock, ChevronLeft, ChevronRight } from "lucide-react"
 import Link from "next/link"
 import { InstagramPreview } from "@/components/generate/instagram-preview"
 import { FacebookPreview } from "@/components/generate/facebook-preview"
@@ -28,6 +28,25 @@ export default function PreviewPage() {
   const [regenerationCount, setRegenerationCount] = useState(0)
   const [instagramAccount, setInstagramAccount] = useState<any>(null)
   const [isStory, setIsStory] = useState(false)
+  
+  // Historial de regeneraciones
+  const [copyHistory, setCopyHistory] = useState<Array<{
+    id: string;
+    copy: string;
+    hashtags: string[];
+    timestamp: Date;
+  }>>([])
+  const [imageHistory, setImageHistory] = useState<Array<{
+    id: string;
+    imageUrl: string;
+    storageInfo: {
+      storage_file_name: string | null;
+      is_permanent_image: boolean;
+    } | null;
+    timestamp: Date;
+  }>>([])
+  const [selectedCopyVersion, setSelectedCopyVersion] = useState<string>("")
+  const [selectedImageVersion, setSelectedImageVersion] = useState<string>("")
 
   // Cargar contenido generado desde localStorage
   useEffect(() => {
@@ -43,6 +62,20 @@ export default function PreviewPage() {
         setStorageInfo(content.storageInfo || null)
         setRegenerationCount(content.regenerationCount || 0)
         setIsStory(content.formData?.isStory || false)
+        
+        // Cargar historial si existe
+        if (content.copyHistory) {
+          setCopyHistory(content.copyHistory.map((v: any) => ({
+            ...v,
+            timestamp: new Date(v.timestamp)
+          })))
+        }
+        if (content.imageHistory) {
+          setImageHistory(content.imageHistory.map((v: any) => ({
+            ...v,
+            timestamp: new Date(v.timestamp)
+          })))
+        }
       } catch (error) {
         console.error('❌ Error cargando contenido generado:', error)
         // Fallback content
@@ -58,36 +91,41 @@ export default function PreviewPage() {
     setIsLoading(false)
   }, [])
 
-  // Cargar información de la cuenta de Instagram conectada
+  // Cargar información de todas las conexiones sociales
   useEffect(() => {
-    const fetchInstagramAccount = async () => {
+    const fetchSocialConnections = async () => {
       try {
-        const response = await fetch('/api/instagram/connections')
+        const response = await fetch('/api/social/connections')
         if (response.ok) {
           const data = await response.json()
-          if (data.connections && data.connections.length > 0) {
-            const connection = data.connections[0] // Usar la primera conexión
-            console.log('📸 Cuenta de Instagram cargada:', connection)
+          setConnections(data.connections || [])
+          // Set Instagram account for backwards compatibility
+          const instagramConnection = data.connections?.find((c: any) => c.plataforma === 'instagram')
+          if (instagramConnection) {
+            console.log('📸 Cuenta de Instagram cargada:', instagramConnection)
             setInstagramAccount({
-              username: connection.nombre_cuenta,
-              name: connection.metadata?.name || connection.nombre_cuenta,
-              profile_picture_url: connection.metadata?.profile_picture_url,
-              followers_count: connection.metadata?.followers_count
+              username: instagramConnection.nombre_cuenta,
+              name: instagramConnection.metadata?.name || instagramConnection.nombre_cuenta,
+              profile_picture_url: instagramConnection.metadata?.profile_picture_url,
+              followers_count: instagramConnection.metadata?.followers_count
             })
           }
         }
       } catch (error) {
-        console.error('❌ Error cargando cuenta de Instagram:', error)
+        console.error('❌ Error cargando conexiones sociales:', error)
       }
     }
 
-    fetchInstagramAccount()
+    fetchSocialConnections()
   }, [])
 
   const [newHashtag, setNewHashtag] = useState("")
   const [isRegenerating, setIsRegenerating] = useState({ copy: false, image: false })
   const [selectedPlatform, setSelectedPlatform] = useState("instagram")
+  const [connections, setConnections] = useState<any[]>([])
   const [isPublishing, setIsPublishing] = useState(false)
+  const [isPublishingInstagram, setIsPublishingInstagram] = useState(false)
+  const [isPublishingFacebook, setIsPublishingFacebook] = useState(false)
   const [showScheduleDialog, setShowScheduleDialog] = useState(false)
   const [scheduledDate, setScheduledDate] = useState('')
   const [scheduledTime, setScheduledTime] = useState('')
@@ -101,6 +139,74 @@ export default function PreviewPage() {
 
   const removeHashtag = (index: number) => {
     setHashtags(hashtags.filter((_, i) => i !== index))
+  }
+
+  const selectCopyVersion = (versionId: string) => {
+    const version = copyHistory.find(v => v.id === versionId)
+    if (version) {
+      setCopy(version.copy)
+      setHashtags(version.hashtags)
+      setSelectedCopyVersion(versionId)
+      toast.success('Versión de copy seleccionada')
+    }
+  }
+
+  const selectImageVersion = (versionId: string) => {
+    const version = imageHistory.find(v => v.id === versionId)
+    if (version) {
+      setImageUrl(version.imageUrl)
+      setStorageInfo(version.storageInfo)
+      setSelectedImageVersion(versionId)
+      toast.success('Versión de imagen seleccionada')
+    }
+  }
+
+  // Funciones de navegación para copy
+  const navigateCopyHistory = (direction: 'prev' | 'next') => {
+    if (copyHistory.length === 0) return
+    
+    let currentIndex = copyHistory.findIndex(v => v.id === selectedCopyVersion)
+    if (currentIndex === -1) currentIndex = copyHistory.length - 1 // Si no hay selección, empezar desde el final
+    
+    let newIndex: number
+
+    if (direction === 'prev') {
+      newIndex = currentIndex > 0 ? currentIndex - 1 : copyHistory.length - 1
+    } else {
+      newIndex = currentIndex < copyHistory.length - 1 ? currentIndex + 1 : 0
+    }
+
+    if (newIndex >= 0 && newIndex < copyHistory.length) {
+      const version = copyHistory[newIndex]
+      setCopy(version.copy)
+      setHashtags(version.hashtags)
+      setSelectedCopyVersion(version.id)
+      toast.success(`Versión ${copyHistory.length - newIndex} seleccionada`)
+    }
+  }
+
+  // Funciones de navegación para imagen
+  const navigateImageHistory = (direction: 'prev' | 'next') => {
+    if (imageHistory.length === 0) return
+    
+    let currentIndex = imageHistory.findIndex(v => v.id === selectedImageVersion)
+    if (currentIndex === -1) currentIndex = imageHistory.length - 1 // Si no hay selección, empezar desde el final
+    
+    let newIndex: number
+
+    if (direction === 'prev') {
+      newIndex = currentIndex > 0 ? currentIndex - 1 : imageHistory.length - 1
+    } else {
+      newIndex = currentIndex < imageHistory.length - 1 ? currentIndex + 1 : 0
+    }
+
+    if (newIndex >= 0 && newIndex < imageHistory.length) {
+      const version = imageHistory[newIndex]
+      setImageUrl(version.imageUrl)
+      setStorageInfo(version.storageInfo)
+      setSelectedImageVersion(version.id)
+      toast.success(`Versión ${imageHistory.length - newIndex} seleccionada`)
+    }
   }
 
   const regenerateCopy = async () => {
@@ -136,12 +242,33 @@ export default function PreviewPage() {
 
       if (response.ok) {
         const newContent = await response.json()
+        
+        // Agregar la versión actual al historial ANTES de actualizar
+        if (copy && copy.trim()) {
+          const currentVersion = {
+            id: `copy-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+            copy: copy,
+            hashtags: [...hashtags],
+            timestamp: new Date()
+          }
+          setCopyHistory(prev => [...prev, currentVersion])
+        }
+        
+        // Actualizar con la nueva versión (sin crear una nueva entrada en el historial)
         setCopy(newContent.copy)
         setHashtags(newContent.hashtags || [])
         setRegenerationCount(newContent.regenerationCount || 0)
+        // No establecer selectedCopyVersion aquí, ya que es la versión actual
         
-        // Actualizar localStorage
-        localStorage.setItem('generatedContent', JSON.stringify(newContent))
+        // Actualizar localStorage con el historial
+        const updatedContent = {
+          ...newContent,
+          copyHistory: copyHistory,
+          imageHistory: imageHistory
+        }
+        localStorage.setItem('generatedContent', JSON.stringify(updatedContent))
+        
+        toast.success('Copy regenerado exitosamente')
       } else {
         const errorData = await response.json()
         toast.error(errorData.error || 'Error al regenerar el copy')
@@ -178,11 +305,34 @@ export default function PreviewPage() {
 
       if (response.ok) {
         const newContent = await response.json()
-        setImageUrl(newContent.imageUrl)
         
-        // Actualizar localStorage
-        const updatedContent = { ...content, imageUrl: newContent.imageUrl }
+        // Agregar la versión actual al historial ANTES de actualizar
+        if (imageUrl) {
+          const currentVersion = {
+            id: `image-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+            imageUrl: imageUrl,
+            storageInfo: storageInfo,
+            timestamp: new Date()
+          }
+          setImageHistory(prev => [...prev, currentVersion])
+        }
+        
+        // Actualizar con la nueva versión (sin crear una nueva entrada en el historial)
+        setImageUrl(newContent.imageUrl)
+        setStorageInfo(newContent.storageInfo || null)
+        // No establecer selectedImageVersion aquí, ya que es la versión actual
+        
+        // Actualizar localStorage con el historial
+        const updatedContent = { 
+          ...content, 
+          imageUrl: newContent.imageUrl, 
+          storageInfo: newContent.storageInfo,
+          copyHistory: copyHistory,
+          imageHistory: imageHistory
+        }
         localStorage.setItem('generatedContent', JSON.stringify(updatedContent))
+        
+        toast.success('Imagen regenerada exitosamente')
       } else {
         toast.error('Error al regenerar la imagen')
       }
@@ -222,11 +372,14 @@ export default function PreviewPage() {
         }
       }
 
-      // Crear el post en la base de datos con estado "borrador"
+      const savedDrafts = []
+      
+      // Crear un borrador para la plataforma seleccionada
+      const platform = selectedPlatform
       const postData = {
-        titulo: `${isStory ? 'Historia' : 'Post'} en ${selectedPlatform} - ${new Date().toLocaleDateString()}`,
+        titulo: `${isStory ? 'Historia' : 'Post'} en ${getPlatformName(platform)} - ${new Date().toLocaleDateString()}`,
         contenido: copy,
-        plataforma: selectedPlatform,
+        plataforma: platform,
         tipo: isStory ? 'historia' : 'publicacion',
         hashtags: hashtags,
         imagen_url: imageUrl,
@@ -235,7 +388,7 @@ export default function PreviewPage() {
         is_permanent_image: storageInfo?.is_permanent_image || false
       }
 
-      console.log('💾 Guardando post como borrador en base de datos...')
+      console.log(`💾 Guardando borrador para ${platform}...`)
       const postResponse = await fetch('/api/posts', {
         method: 'POST',
         headers: {
@@ -244,19 +397,25 @@ export default function PreviewPage() {
         body: JSON.stringify(postData)
       })
 
-      if (!postResponse.ok) {
+      if (postResponse.ok) {
+        const postResult = await postResponse.json()
+        savedDrafts.push({ platform, id: postResult.id })
+        console.log(`✅ Borrador para ${platform} guardado:`, postResult.id)
+      } else {
         const errorData = await postResponse.json()
-        throw new Error(`Error guardando borrador: ${errorData.error || 'Error desconocido'}`)
+        console.error(`❌ Error guardando borrador para ${platform}:`, errorData.error)
       }
 
-      const postResult = await postResponse.json()
-      console.log('✅ Borrador guardado en BD:', postResult.id)
+      if (savedDrafts.length === 0) {
+        throw new Error('No se pudo guardar ningún borrador')
+      }
       
       // Dismissar el toast de loading
       toast.dismiss(loadingToast)
       
       // Mostrar mensaje de éxito
-      toast.success(`¡${isStory ? 'Historia' : 'Borrador'} guardado exitosamente! 📝`, {
+      const platforms = savedDrafts.map(d => getPlatformName(d.platform)).join(', ')
+      toast.success(`¡${savedDrafts.length} ${isStory ? 'historia(s)' : 'borrador(es)'} guardado(s) para ${platforms}! 📝`, {
         duration: 4000,
         icon: '💾',
       })
@@ -283,7 +442,6 @@ export default function PreviewPage() {
   const handlePublishNow = async () => {
     setIsPublishing(true)
     
-    // Mostrar toast de loading
     const loadingToast = toast.loading('Publicando en Instagram...', {
       duration: Infinity,
     })
@@ -300,14 +458,12 @@ export default function PreviewPage() {
 
       // Verificar que tenemos contenido para publicar
       if (isStory) {
-        // Para historias, solo se requiere imagen
         if (!imageUrl) {
           toast.dismiss(loadingToast)
           toast.error('Necesitas una imagen para publicar la historia.')
           return
         }
       } else {
-        // Para publicaciones, se requiere copy e imagen
         if (!copy || !imageUrl) {
           toast.dismiss(loadingToast)
           toast.error('Necesitas contenido (copy) e imagen para publicar.')
@@ -315,7 +471,7 @@ export default function PreviewPage() {
         }
       }
 
-      // Primero, crear el post en la base de datos con estado "borrador"
+      // Crear el post en la base de datos con estado "publicado"
       const postData = {
         titulo: `${isStory ? 'Historia' : 'Post'} en Instagram - ${new Date().toLocaleDateString()}`,
         contenido: copy,
@@ -323,7 +479,10 @@ export default function PreviewPage() {
         tipo: isStory ? 'historia' : 'publicacion',
         hashtags: hashtags,
         imagen_url: imageUrl,
-        prompt_utilizado: "Generado con IA desde la interfaz web"
+        prompt_utilizado: "Generado con IA desde la interfaz web",
+        storage_file_name: storageInfo?.storage_file_name || null,
+        is_permanent_image: storageInfo?.is_permanent_image || false,
+        estado: 'publicado'
       }
 
       console.log('💾 Guardando post en base de datos...')
@@ -341,7 +500,7 @@ export default function PreviewPage() {
       }
 
       const postResult = await postResponse.json()
-      console.log('✅ Post guardado en BD:', postResult.id)
+      console.log('✅ Post guardado en BD con ID:', postResult.id)
 
       // Obtener la conexión de Instagram
       console.log('🔍 Obteniendo conexión de Instagram...')
@@ -358,49 +517,30 @@ export default function PreviewPage() {
       const connection = connectionsData.connections[0]
       console.log('📸 Usando conexión:', connection.nombre_cuenta)
 
-      // Publicar en Instagram
-      console.log('📤 Publicando en Instagram...')
-      const publishData = {
-        connectionId: connection.id,
-        caption: `${copy}\n\n${hashtags.join(' ')}`,
-        imageUrl: imageUrl,
-        postId: postResult.id
-      }
-
+      // Publicar en Instagram usando el endpoint específico
+      console.log('🚀 Publicando en Instagram...')
       const publishResponse = await fetch('/api/instagram/publish', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(publishData)
+        body: JSON.stringify({
+          connectionId: connection.id,
+          caption: copy,
+          imageUrl: imageUrl,
+          postId: postResult.id,
+          contentType: isStory ? 'story' : 'post'
+        })
       })
 
       if (!publishResponse.ok) {
         const errorData = await publishResponse.json()
+        console.error('❌ Error en respuesta de Instagram:', errorData)
         throw new Error(`Error publicando en Instagram: ${errorData.error || errorData.details || 'Error desconocido'}`)
       }
 
       const publishResult = await publishResponse.json()
       console.log('🎉 ¡Publicado exitosamente en Instagram!', publishResult)
-
-      // Actualizar el estado del post a "publicado"
-      console.log('🔄 Actualizando estado del post a "publicado"...')
-      const updateResponse = await fetch(`/api/posts/${postResult.id}`, {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          estado: 'publicado',
-          fecha_publicacion: new Date().toISOString()
-        })
-      })
-
-      if (!updateResponse.ok) {
-        console.warn('⚠️ No se pudo actualizar el estado del post, pero se publicó en Instagram')
-      } else {
-        console.log('✅ Estado del post actualizado a "publicado"')
-      }
       
       // Dismissar el toast de loading
       toast.dismiss(loadingToast)
@@ -430,14 +570,254 @@ export default function PreviewPage() {
     }
   }
 
+  const handlePublishToInstagram = async () => {
+    setIsPublishingInstagram(true)
+    
+    const loadingToast = toast.loading('Publicando en Instagram...', {
+      duration: Infinity,
+    })
+    
+    try {
+      console.log('🚀 Iniciando publicación en Instagram...')
+      
+      // Verificar que tenemos una cuenta de Instagram conectada
+      const instagramConnection = connections.find(c => c.plataforma === 'instagram')
+      if (!instagramConnection) {
+        toast.dismiss(loadingToast)
+        toast.error('No hay cuenta de Instagram conectada. Ve a Configuración para conectar tu cuenta.')
+        return
+      }
+
+      // Verificar que tenemos contenido para publicar
+      if (isStory) {
+        if (!imageUrl) {
+          toast.dismiss(loadingToast)
+          toast.error('Necesitas una imagen para publicar la historia.')
+          return
+        }
+      } else {
+        if (!copy || !imageUrl) {
+          toast.dismiss(loadingToast)
+          toast.error('Necesitas contenido (copy) e imagen para publicar.')
+          return
+        }
+      }
+
+      // Crear el post en la base de datos con estado "publicado"
+      const postData = {
+        titulo: `${isStory ? 'Historia' : 'Post'} en Instagram - ${new Date().toLocaleDateString()}`,
+        contenido: copy,
+        plataforma: 'instagram',
+        tipo: isStory ? 'historia' : 'publicacion',
+        hashtags: hashtags,
+        imagen_url: imageUrl,
+        prompt_utilizado: "Generado con IA desde la interfaz web",
+        storage_file_name: storageInfo?.storage_file_name || null,
+        is_permanent_image: storageInfo?.is_permanent_image || false,
+        estado: 'publicado'
+      }
+
+      console.log('💾 Guardando post en base de datos...')
+      const postResponse = await fetch('/api/posts', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(postData)
+      })
+
+      if (!postResponse.ok) {
+        const errorData = await postResponse.json()
+        throw new Error(`Error guardando post: ${errorData.error || 'Error desconocido'}`)
+      }
+
+      const postResult = await postResponse.json()
+      console.log('✅ Post guardado en BD con ID:', postResult.id)
+
+      // Publicar en Instagram usando el endpoint específico
+      console.log('🚀 Publicando en Instagram...')
+      const publishResponse = await fetch('/api/instagram/publish', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          connectionId: instagramConnection.id,
+          caption: copy,
+          imageUrl: imageUrl,
+          postId: postResult.id,
+          contentType: isStory ? 'story' : 'post'
+        })
+      })
+
+      if (!publishResponse.ok) {
+        const errorData = await publishResponse.json()
+        console.error('❌ Error en respuesta de Instagram:', errorData)
+        throw new Error(`Error publicando en Instagram: ${errorData.error || errorData.details || 'Error desconocido'}`)
+      }
+
+      const publishResult = await publishResponse.json()
+      console.log('🎉 ¡Publicado exitosamente en Instagram!', publishResult)
+      
+      // Dismissar el toast de loading
+      toast.dismiss(loadingToast)
+      
+      // Mostrar mensaje de éxito
+      toast.success(`¡${isStory ? 'Historia' : 'Post'} publicado exitosamente en Instagram! 🎉`, {
+        duration: 4000,
+        icon: '📸',
+      })
+      
+      // Pequeña pausa para que el usuario vea el toast
+      setTimeout(() => {
+        window.location.href = '/dashboard/history'
+      }, 1500)
+
+    } catch (error) {
+      console.error('❌ Error publicando en Instagram:', error)
+      
+      // Dismissar el toast de loading
+      toast.dismiss(loadingToast)
+      
+      toast.error(`Error publicando en Instagram: ${error instanceof Error ? error.message : 'Error desconocido'}`, {
+        duration: 6000,
+      })
+    } finally {
+      setIsPublishingInstagram(false)
+    }
+  }
+
+  const handlePublishToFacebook = async () => {
+    setIsPublishingFacebook(true)
+    
+    const loadingToast = toast.loading('Publicando en Facebook...', {
+      duration: Infinity,
+    })
+    
+    try {
+      console.log('🚀 Iniciando publicación en Facebook...')
+      
+      // Verificar que tenemos una cuenta de Facebook conectada
+      const facebookConnection = connections.find(c => c.plataforma === 'facebook')
+      if (!facebookConnection) {
+        toast.dismiss(loadingToast)
+        toast.error('No hay cuenta de Facebook conectada. Ve a Configuración para conectar tu cuenta.')
+        return
+      }
+
+      // Verificar que tenemos contenido para publicar
+      if (isStory) {
+        if (!imageUrl) {
+          toast.dismiss(loadingToast)
+          toast.error('Necesitas una imagen para publicar la historia.')
+          return
+        }
+      } else {
+        if (!copy || !imageUrl) {
+          toast.dismiss(loadingToast)
+          toast.error('Necesitas contenido (copy) e imagen para publicar.')
+          return
+        }
+      }
+
+      // Crear el post en la base de datos con estado "publicado"
+      const postData = {
+        titulo: `${isStory ? 'Historia' : 'Post'} en Facebook - ${new Date().toLocaleDateString()}`,
+        contenido: copy,
+        plataforma: 'facebook',
+        tipo: isStory ? 'historia' : 'publicacion',
+        hashtags: hashtags,
+        imagen_url: imageUrl,
+        prompt_utilizado: "Generado con IA desde la interfaz web",
+        storage_file_name: storageInfo?.storage_file_name || null,
+        is_permanent_image: storageInfo?.is_permanent_image || false,
+        estado: 'publicado'
+      }
+
+      console.log('💾 Guardando post en base de datos...')
+      const postResponse = await fetch('/api/posts', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(postData)
+      })
+
+      if (!postResponse.ok) {
+        const errorData = await postResponse.json()
+        throw new Error(`Error guardando post: ${errorData.error || 'Error desconocido'}`)
+      }
+
+      const postResult = await postResponse.json()
+      console.log('✅ Post guardado en BD con ID:', postResult.id)
+
+      // Publicar en Facebook usando el endpoint específico
+      console.log('🚀 Publicando en Facebook...')
+      const publishResponse = await fetch('/api/facebook/publish', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          connectionId: facebookConnection.id,
+          caption: copy,
+          imageUrl: imageUrl,
+          postId: postResult.id,
+          contentType: isStory ? 'story' : 'post'
+        })
+      })
+
+      if (!publishResponse.ok) {
+        const errorData = await publishResponse.json()
+        console.error('❌ Error en respuesta de Facebook:', errorData)
+        throw new Error(`Error publicando en Facebook: ${errorData.error || errorData.details || 'Error desconocido'}`)
+      }
+
+      const publishResult = await publishResponse.json()
+      console.log('🎉 ¡Publicado exitosamente en Facebook!', publishResult)
+      
+      // Dismissar el toast de loading
+      toast.dismiss(loadingToast)
+      
+      // Mostrar mensaje de éxito
+      toast.success(`¡${isStory ? 'Historia' : 'Post'} publicado exitosamente en Facebook! 🎉`, {
+        duration: 4000,
+        icon: '📵',
+      })
+      
+      // Pequeña pausa para que el usuario vea el toast
+      setTimeout(() => {
+        window.location.href = '/dashboard/history'
+      }, 1500)
+
+    } catch (error) {
+      console.error('❌ Error publicando en Facebook:', error)
+      
+      // Dismissar el toast de loading
+      toast.dismiss(loadingToast)
+      
+      toast.error(`Error publicando en Facebook: ${error instanceof Error ? error.message : 'Error desconocido'}`, {
+        duration: 6000,
+      })
+    } finally {
+      setIsPublishingFacebook(false)
+    }
+  }
+
   const handleSchedulePost = async () => {
     if (!scheduledDate || !scheduledTime) {
       toast.error('Por favor selecciona una fecha y hora para programar el post')
       return
     }
 
+    console.log('📅 Fecha programada:', scheduledDate)
+    console.log('⏰ Hora programada:', scheduledTime)
+    
     const scheduledDateTime = new Date(`${scheduledDate}T${scheduledTime}`)
+    console.log('🕐 DateTime construido:', scheduledDateTime.toISOString())
+    
     const now = new Date()
+    console.log('🕐 Ahora:', now.toISOString())
 
     if (scheduledDateTime <= now) {
       toast.error('La fecha y hora programada debe ser futura')
@@ -465,11 +845,14 @@ export default function PreviewPage() {
         }
       }
 
-      // Create post in DB with 'programado' status
+      const scheduledPosts = []
+      
+      // Create posts for the selected platform with 'programado' status
+      const platform = selectedPlatform
       const postData = {
-        titulo: `${isStory ? 'Historia' : 'Post'} programado en ${selectedPlatform} - ${scheduledDate}`,
+        titulo: `${isStory ? 'Historia' : 'Post'} programado en ${getPlatformName(platform)} - ${scheduledDate}`,
         contenido: copy,
-        plataforma: selectedPlatform,
+        plataforma: platform,
         tipo: isStory ? 'historia' : 'publicacion',
         hashtags: hashtags,
         imagen_url: imageUrl,
@@ -486,15 +869,22 @@ export default function PreviewPage() {
         body: JSON.stringify(postData) 
       })
 
-      if (!postResponse.ok) {
+      if (postResponse.ok) {
+        const postResult = await postResponse.json()
+        scheduledPosts.push({ platform, id: postResult.id })
+        console.log(`✅ Post programado para ${platform}:`, postResult.id)
+      } else {
         const errorData = await postResponse.json()
-        throw new Error(`Error programando post: ${errorData.error || 'Error desconocido'}`)
+        console.error(`❌ Error programando post para ${platform}:`, errorData.error)
       }
 
-      const postResult = await postResponse.json()
+      if (scheduledPosts.length === 0) {
+        throw new Error('No se pudo programar ningún post')
+      }
 
       toast.dismiss(loadingToast)
-      toast.success(`¡${isStory ? 'Historia' : 'Post'} programado exitosamente para ${formatScheduledDate(scheduledDateTime)}! 📅`, { 
+      const platforms = scheduledPosts.map(p => getPlatformName(p.platform)).join(', ')
+      toast.success(`¡${scheduledPosts.length} ${isStory ? 'historia(s)' : 'post(s)'} programado(s) para ${platforms} el ${formatScheduledDate(scheduledDateTime)}! 📅`, { 
         duration: 4000, 
         icon: '⏰' 
       })
@@ -602,21 +992,79 @@ export default function PreviewPage() {
               <CardHeader>
                 <div className="flex items-center justify-between">
                   <CardTitle className="text-lg">Copy del Post</CardTitle>
-                  <Button 
-                    variant="outline" 
-                    size="sm" 
-                    onClick={regenerateCopy} 
-                    disabled={isRegenerating.copy || regenerationCount >= 3}
-                  >
-                    <RefreshCw className={`w-4 h-4 mr-2 ${isRegenerating.copy ? "animate-spin" : ""}`} />
-                    {isRegenerating.copy ? "Regenerando..." : `Regenerar (${3 - regenerationCount} restantes)`}
-                  </Button>
+                  <div className="flex items-center space-x-2">
+                    {/* Navegación de versiones */}
+                    {copyHistory.length > 0 && (
+                      <div className="flex items-center space-x-1">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => navigateCopyHistory('prev')}
+                          disabled={copyHistory.length <= 1}
+                          className="h-6 w-6 p-0"
+                        >
+                          <ChevronLeft className="w-3 h-3" />
+                        </Button>
+                        <span className="text-xs text-muted-foreground px-2">
+                          {selectedCopyVersion ? copyHistory.findIndex(v => v.id === selectedCopyVersion) + 1 : 0} / {copyHistory.length}
+                        </span>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => navigateCopyHistory('next')}
+                          disabled={copyHistory.length <= 1}
+                          className="h-6 w-6 p-0"
+                        >
+                          <ChevronRight className="w-3 h-3" />
+                        </Button>
+                      </div>
+                    )}
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      onClick={regenerateCopy} 
+                      disabled={isRegenerating.copy || regenerationCount >= 3}
+                    >
+                      <RefreshCw className={`w-4 h-4 mr-2 ${isRegenerating.copy ? "animate-spin" : ""}`} />
+                      {isRegenerating.copy ? "Regenerando..." : `Regenerar (${3 - regenerationCount} restantes)`}
+                    </Button>
+                  </div>
                 </div>
                 <CardDescription>Edita el texto de tu publicación</CardDescription>
               </CardHeader>
               <CardContent>
                 <Textarea value={copy} onChange={(e) => setCopy(e.target.value)} rows={6} className="resize-none" />
                 <p className="text-xs text-muted-foreground mt-2">{copy.length} caracteres</p>
+                
+                {/* Historial de versiones de copy */}
+                {copyHistory.length > 0 && (
+                  <div className="mt-4 pt-4 border-t">
+                    <h4 className="text-sm font-medium mb-3">Versiones anteriores:</h4>
+                    <div className="space-y-2 max-h-32 overflow-y-auto">
+                      {copyHistory.map((version, index) => (
+                        <div 
+                          key={version.id}
+                          className={`p-2 rounded border cursor-pointer transition-colors ${
+                            selectedCopyVersion === version.id 
+                              ? 'border-primary bg-primary/5' 
+                              : 'border-border hover:border-primary/50'
+                          }`}
+                          onClick={() => selectCopyVersion(version.id)}
+                        >
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs text-muted-foreground">
+                              Versión {copyHistory.length - index} - {version.timestamp.toLocaleTimeString()}
+                            </span>
+                            {selectedCopyVersion === version.id && (
+                              <Badge variant="secondary" className="text-xs">Seleccionada</Badge>
+                            )}
+                          </div>
+                          <p className="text-xs mt-1 line-clamp-2">{version.copy}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </CardContent>
             </Card>
           )}
@@ -664,7 +1112,37 @@ export default function PreviewPage() {
           {/* Image Controls */}
           <Card>
             <CardHeader>
-              <CardTitle className="text-lg">Imagen</CardTitle>
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-lg">Imagen</CardTitle>
+                <div className="flex items-center space-x-2">
+                  {/* Navegación de versiones */}
+                  {imageHistory.length > 0 && (
+                    <div className="flex items-center space-x-1">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => navigateImageHistory('prev')}
+                        disabled={imageHistory.length <= 1}
+                        className="h-6 w-6 p-0"
+                      >
+                        <ChevronLeft className="w-3 h-3" />
+                      </Button>
+                      <span className="text-xs text-muted-foreground px-2">
+                        {selectedImageVersion ? imageHistory.findIndex(v => v.id === selectedImageVersion) + 1 : 0} / {imageHistory.length}
+                      </span>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => navigateImageHistory('next')}
+                        disabled={imageHistory.length <= 1}
+                        className="h-6 w-6 p-0"
+                      >
+                        <ChevronRight className="w-3 h-3" />
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              </div>
               <CardDescription>Controla la imagen de tu publicación</CardDescription>
             </CardHeader>
             <CardContent>
@@ -677,6 +1155,40 @@ export default function PreviewPage() {
                 <RefreshCw className={`w-4 h-4 mr-2 ${isRegenerating.image ? "animate-spin" : ""}`} />
                 {isRegenerating.image ? "Regenerando Imagen..." : "Regenerar Imagen"}
               </Button>
+              
+              {/* Historial de versiones de imagen */}
+              {imageHistory.length > 0 && (
+                <div className="mt-4 pt-4 border-t">
+                  <h4 className="text-sm font-medium mb-3">Versiones anteriores:</h4>
+                  <div className="grid grid-cols-2 gap-2 max-h-32 overflow-y-auto">
+                    {imageHistory.map((version, index) => (
+                      <div 
+                        key={version.id}
+                        className={`relative rounded border cursor-pointer transition-colors overflow-hidden ${
+                          selectedImageVersion === version.id 
+                            ? 'border-primary ring-2 ring-primary/20' 
+                            : 'border-border hover:border-primary/50'
+                        }`}
+                        onClick={() => selectImageVersion(version.id)}
+                      >
+                        <img 
+                          src={version.imageUrl} 
+                          alt={`Versión ${imageHistory.length - index}`}
+                          className="w-full h-16 object-cover"
+                        />
+                        <div className="absolute bottom-0 left-0 right-0 bg-black/70 text-white text-xs p-1">
+                          <div className="flex items-center justify-between">
+                            <span>V{imageHistory.length - index}</span>
+                            {selectedImageVersion === version.id && (
+                              <Badge variant="secondary" className="text-xs bg-white text-black">✓</Badge>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </CardContent>
           </Card>
 
@@ -705,20 +1217,40 @@ export default function PreviewPage() {
                   </>
                 )}
               </Button>
+              {/* Instagram Publish Button */}
               <Button 
-                className="w-full bg-gradient-primary hover:opacity-90" 
-                onClick={handlePublishNow}
-                disabled={isPublishing}
+                className="w-full bg-gradient-to-br from-purple-500 to-pink-500 hover:opacity-90" 
+                onClick={handlePublishToInstagram}
+                disabled={isPublishingInstagram || !connections.find(c => c.plataforma === 'instagram')}
               >
-                {isPublishing ? (
+                {isPublishingInstagram ? (
                   <div className="flex items-center space-x-2">
                     <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                    <span>{isStory ? "Publicando Historia..." : "Publicando..."}</span>
+                    <span>{isStory ? "Publicando Historia en Instagram..." : "Publicando en Instagram..."}</span>
                   </div>
                 ) : (
                   <>
-                    <Send className="w-4 h-4 mr-2" />
-                    {isStory ? "Publicar Historia" : "Publicar Ahora"}
+                    <Instagram className="w-4 h-4 mr-2" />
+                    {isStory ? "Publicar Historia en Instagram" : "Publicar en Instagram"}
+                  </>
+                )}
+              </Button>
+              
+              {/* Facebook Publish Button */}
+              <Button 
+                className="w-full bg-blue-600 hover:bg-blue-700" 
+                onClick={handlePublishToFacebook}
+                disabled={isPublishingFacebook || !connections.find(c => c.plataforma === 'facebook')}
+              >
+                {isPublishingFacebook ? (
+                  <div className="flex items-center space-x-2">
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                    <span>{isStory ? "Publicando Historia en Facebook..." : "Publicando en Facebook..."}</span>
+                  </div>
+                ) : (
+                  <>
+                    <Facebook className="w-4 h-4 mr-2" />
+                    {isStory ? "Publicar Historia en Facebook" : "Publicar en Facebook"}
                   </>
                 )}
               </Button>
@@ -801,32 +1333,38 @@ export default function PreviewPage() {
 
         {/* Right Column - Social Media Preview */}
         <div className="space-y-6">
-          {/* Platform Selector */}
+          {/* Platform Preview Selector */}
           <Card>
             <CardHeader>
-              <CardTitle className="text-lg">Preview de Red Social</CardTitle>
-              <CardDescription>Selecciona la plataforma para ver cómo se verá tu publicación</CardDescription>
+              <CardTitle className="text-lg">Vista Previa</CardTitle>
+              <CardDescription>Selecciona qué plataforma quieres previsualizar</CardDescription>
             </CardHeader>
             <CardContent>
               <Select value={selectedPlatform} onValueChange={setSelectedPlatform}>
-                <SelectTrigger className="w-full">
+                <SelectTrigger>
                   <SelectValue placeholder="Selecciona una plataforma" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="instagram">
                     <div className="flex items-center space-x-2">
-                      <div className="w-4 h-4 bg-gradient-to-br from-purple-500 to-pink-500 rounded flex items-center justify-center">
-                        <Instagram className="w-3 h-3 text-white" />
-                      </div>
+                      <Instagram className="w-4 h-4" />
                       <span>Instagram</span>
+                      {connections.find(c => c.plataforma === 'instagram') && (
+                        <Badge variant="secondary" className="text-xs ml-1">
+                          @{connections.find(c => c.plataforma === 'instagram')?.nombre_cuenta}
+                        </Badge>
+                      )}
                     </div>
                   </SelectItem>
                   <SelectItem value="facebook">
                     <div className="flex items-center space-x-2">
-                      <div className="w-4 h-4 bg-blue-600 rounded flex items-center justify-center">
-                        <Facebook className="w-3 h-3 text-white" />
-                      </div>
+                      <Facebook className="w-4 h-4" />
                       <span>Facebook</span>
+                      {connections.find(c => c.plataforma === 'facebook') && (
+                        <Badge variant="secondary" className="text-xs ml-1">
+                          {connections.find(c => c.plataforma === 'facebook')?.nombre_cuenta}
+                        </Badge>
+                      )}
                     </div>
                   </SelectItem>
                 </SelectContent>
@@ -837,36 +1375,48 @@ export default function PreviewPage() {
           {/* Preview Card */}
           <Card className="min-h-[600px]">
             <CardHeader>
-              <div className="flex items-center space-x-2">
-                <div className={`w-8 h-8 ${getPlatformColor(selectedPlatform)} rounded-lg flex items-center justify-center`}>
-                  {getPlatformIcon(selectedPlatform)}
-                </div>
-                <h3 className="text-lg font-semibold">{getPlatformName(selectedPlatform)}</h3>
-              </div>
+              <CardTitle className="text-lg">Preview de {getPlatformName(selectedPlatform)}</CardTitle>
+              <CardDescription>
+                Cómo se verá tu {isStory ? 'historia' : 'publicación'} en {getPlatformName(selectedPlatform)}
+              </CardDescription>
             </CardHeader>
             <CardContent>
-              {isStory ? (
-                <StoryPreview 
-                  imageUrl={imageUrl}
-                  isRegeneratingImage={isRegenerating.image}
-                  platform={selectedPlatform as "instagram" | "facebook"}
-                />
-              ) : selectedPlatform === "instagram" ? (
-                <InstagramPreview 
-                  copy={copy} 
-                  hashtags={hashtags.join(" ")} 
-                  isRegeneratingImage={isRegenerating.image}
-                  imageUrl={imageUrl}
-                  instagramAccount={instagramAccount}
-                />
-              ) : (
-                <FacebookPreview 
-                  copy={copy} 
-                  hashtags={hashtags.join(" ")} 
-                  isRegeneratingImage={isRegenerating.image}
-                  imageUrl={imageUrl}
-                />
-              )}
+              <div className="border rounded-lg p-4">
+                <div className="flex items-center space-x-2 mb-4">
+                  <div className={`w-6 h-6 ${getPlatformColor(selectedPlatform)} rounded flex items-center justify-center`}>
+                    {getPlatformIcon(selectedPlatform)}
+                  </div>
+                  <h4 className="font-medium">{getPlatformName(selectedPlatform)}</h4>
+                  {connections.find(c => c.plataforma === selectedPlatform) && (
+                    <Badge variant="outline" className="text-xs">
+                      {selectedPlatform === 'instagram' ? '@' : ''}{connections.find(c => c.plataforma === selectedPlatform)?.nombre_cuenta}
+                    </Badge>
+                  )}
+                </div>
+                
+                {isStory ? (
+                  <StoryPreview 
+                    imageUrl={imageUrl}
+                    isRegeneratingImage={isRegenerating.image}
+                    platform={selectedPlatform as "instagram" | "facebook"}
+                  />
+                ) : selectedPlatform === "instagram" ? (
+                  <InstagramPreview 
+                    copy={copy} 
+                    hashtags={hashtags.join(" ")} 
+                    isRegeneratingImage={isRegenerating.image}
+                    imageUrl={imageUrl}
+                    instagramAccount={instagramAccount}
+                  />
+                ) : (
+                  <FacebookPreview 
+                    copy={copy} 
+                    hashtags={hashtags.join(" ")} 
+                    isRegeneratingImage={isRegenerating.image}
+                    imageUrl={imageUrl}
+                  />
+                )}
+              </div>
             </CardContent>
           </Card>
         </div>

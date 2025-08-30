@@ -119,6 +119,7 @@ export default function ClientLayout({
 
   return (
     <div className="min-h-screen bg-background">
+      
       <ClientSidebar />
       <div className="lg:pl-64">
         {/* Header */}

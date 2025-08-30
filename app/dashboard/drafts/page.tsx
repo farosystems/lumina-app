@@ -6,6 +6,9 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Search, Instagram, Facebook, Twitter, Linkedin, Send, Trash2, Eye, Edit, FileText, User, Clock, Calendar } from "lucide-react"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
+import { Checkbox } from "@/components/ui/checkbox"
+import { Label } from "@/components/ui/label"
 import { PageTransition, StaggeredPageTransition, CardTransition, ListTransition, ListItemTransition } from "@/components/page-transition"
 import { Post } from "@/lib/types"
 import toast from 'react-hot-toast'
@@ -17,9 +20,14 @@ export default function DraftsPage() {
   const [searchTerm, setSearchTerm] = useState("")
   const [publishing, setPublishing] = useState<string | null>(null)
   const [deleting, setDeleting] = useState<string | null>(null)
+  const [showPublishDialog, setShowPublishDialog] = useState(false)
+  const [selectedDraft, setSelectedDraft] = useState<Post | null>(null)
+  const [selectedPlatforms, setSelectedPlatforms] = useState<string[]>([])
+  const [connections, setConnections] = useState<any[]>([])
 
   useEffect(() => {
     fetchDrafts()
+    fetchConnections()
   }, [])
 
   const fetchDrafts = async () => {
@@ -40,6 +48,18 @@ export default function DraftsPage() {
       setError('Error cargando borradores')
     } finally {
       setLoading(false)
+    }
+  }
+
+  const fetchConnections = async () => {
+    try {
+      const response = await fetch('/api/social/connections')
+      if (response.ok) {
+        const data = await response.json()
+        setConnections(data.connections || [])
+      }
+    } catch (error) {
+      console.error('Error fetching connections:', error)
     }
   }
 

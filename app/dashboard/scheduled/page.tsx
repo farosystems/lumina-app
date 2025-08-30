@@ -87,7 +87,15 @@ export default function ScheduledPage() {
   }
 
   const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('es-ES', {
+    if (!dateString) return 'Fecha no definida'
+    
+    const date = new Date(dateString)
+    if (isNaN(date.getTime())) {
+      console.error('❌ Fecha inválida:', dateString)
+      return 'Fecha inválida'
+    }
+    
+    return date.toLocaleDateString('es-ES', {
       year: 'numeric',
       month: 'short',
       day: 'numeric',
@@ -97,8 +105,16 @@ export default function ScheduledPage() {
   }
 
   const formatTimeUntil = (dateString: string) => {
+    if (!dateString) return 'Sin fecha'
+    
     const now = new Date()
     const scheduledDate = new Date(dateString)
+    
+    if (isNaN(scheduledDate.getTime())) {
+      console.error('❌ Fecha inválida en formatTimeUntil:', dateString)
+      return 'Fecha inválida'
+    }
+    
     const diff = scheduledDate.getTime() - now.getTime()
     
     if (diff < 0) {
@@ -435,4 +451,5 @@ export default function ScheduledPage() {
     </PageTransition>
   )
 }
+
 
